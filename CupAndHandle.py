@@ -2,51 +2,60 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.dates import date2num
 
-# Assume 'df' is a DataFrame with 'Date', 'High', 'Low', 'Open', 'Close', 'Volume'
-# Typically, you would load this data from a CSV file or financial API.
 
-# Parameters for the cup and handle
-min_cup_length = 50  # Minimum number of days for the cup
-max_handle_length = 25  # Maximum number of days for the handle
-min_depth = 0.1  # Minimum depth of the cup as a percentage of the price
+def detect_cup_and_handle(df, cup_window_ratio=0.2):
+    """
+    Detects the cup and handle pattern in a given financial DataFrame.
 
-def detect_cup_and_handle(df):
+    Args:
+        df (pd.DataFrame): Financial data containing 'Date', 'High', 'Low', 'Open', 'Close', 'Volume'.
+        cup_window_ratio (float): Ratio of the dataset length to set the cup window size.
 
-    # Define the rolling window size for the cup
-    cup_window = 120  # This is arbitrary and would need to be tuned for your dataset
+    Returns:
+        Tuple: Indices for cup start, handle start, and breakout point or (None, None, None) if not found.
+    """
+    if not {'High', 'Low', 'Open', 'Close', 'Volume'}.issubset(df.columns):
+        raise ValueError("DataFrame must contain 'High', 'Low', 'Open', 'Close', 'Volume' columns")
 
+
+    # Dynamically set the cup window based on the length of the dataset
+    cup_window = max(int(len(df) * cup_window_ratio), 20)  # Ensure a minimum size
 
     potential_cup_mask = df['Low'].rolling(window=cup_window, center=True).min() == df['Low']
 
-    # Adjusted logic for handles and breakouts using the mask
     close_rolled = df['Close'].rolling(window=20).mean()
     volume_rolled = df['Volume'].rolling(window=5).mean()
 
-    # Handles are detected where the price dips slightly after the cup
     handles = (df['Low'] < close_rolled) & potential_cup_mask
-
-    # Breakouts are detected by a close price greater than the rolling mean and a spike in volume
     breakout_volume = df['Volume'] > volume_rolled * 1.5
     breakouts = (df['Close'] > close_rolled) & breakout_volume & handles.shift(-1)
 
     if handles.any() and breakouts.any():
-        # Find the first handle and the first breakout
         handle_start = handles.idxmax()
         breakout_point = breakouts.idxmax()
-
-        # Assume cup start is 'cup_window' periods before the handle
-        cup_start = handle_start - cup_window
+        cup_start = handle_start - pd.Timedelta(days=cup_window)
 
         return cup_start, handle_start, breakout_point
     else:
         return None, None, None
 
 
-def plot_cup_and_handle(df, cup_start, cup_end, handle_start, handle_end, breakout_point):
-    plt.figure(figsize=(15, 7))
-    plt.plot(df['Date'], df['Close'], label='Close Price')
+def plot_cup_and_handle(df, cup_start, handle_start, breakout_point):
+    """
+    Plots the cup and handle pattern.
 
-    # Highlight the cup and handle pattern
+    Args:
+        df (pd.DataFrame): Financial data.
+        cup_start, handle_start, breakout_point (datetime): Indices for cup start, handle start, and breakout point.
+    """
+    plt.figure(figsize=(15, 7))
+    plt.plot(df.index, df['Close'], label='Close Price')
+
+    # Define cup_end and handle_end
+    cup_end = handle_start
+    handle_end = breakout_point
+
+    # Plot the cup and handle
     plt.plot([cup_start, cup_end], [df.loc[cup_start, 'Close'], df.loc[cup_end, 'Close']], color='green', label='Cup')
     plt.plot([handle_start, handle_end], [df.loc[handle_start, 'Close'], df.loc[handle_end, 'Close']], color='orange',
              label='Handle')
@@ -60,12 +69,22 @@ def plot_cup_and_handle(df, cup_start, cup_end, handle_start, handle_end, breako
 
 
 def invokeCandH(df):
-    # This function would be used as follows:
-    cup_start, handle_start, breakout_point = detect_cup_and_handle(df)
-    # You would then pass these to the plotting function to visualize the pattern
-    if cup_start and handle_start and breakout_point:
-        print("Potential Cup and Handle pattern detected.")
-        plot_cup_and_handle(df, cup_start, handle_start, breakout_point)
-    else:
-        print("No Cup and Handle Pattern found")
+    """
+    Invokes the detection and plotting of the Cup and Handle pattern.
 
+    Args:
+        df (pd.DataFrame): Financial data.
+    """
+    try:
+        cup_start, handle_start, breakout_point = detect_cup_and_handle(df)
+        if cup_start is not None and handle_start is not None and breakout_point is not None:
+            print("Potential Cup and Handle pattern detected.")
+            plot_cup_and_handle(df, cup_start, handle_start, breakout_point)
+        else:
+            print("No Cup and Handle Pattern found")
+    except ValueError as e:
+        print(f"Error: {e}")
+
+# Example usage:
+# df = pd.read_csv('your_data.csv')
+# invokeCandH(df)
