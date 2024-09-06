@@ -1,14 +1,13 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.dates import date2num
-
+import os
 
 def detect_cup_and_handle(df, cup_window_ratio=0.2):
     """
     Detects the cup and handle pattern in a given financial DataFrame.
 
     Args:
-        df (pd.DataFrame): Financial data containing 'Date', 'High', 'Low', 'Open', 'Close', 'Volume'.
+        df (pd.DataFrame): Financial data containing 'High', 'Low', 'Open', 'Close', 'Volume'.
         cup_window_ratio (float): Ratio of the dataset length to set the cup window size.
 
     Returns:
@@ -16,7 +15,6 @@ def detect_cup_and_handle(df, cup_window_ratio=0.2):
     """
     if not {'High', 'Low', 'Open', 'Close', 'Volume'}.issubset(df.columns):
         raise ValueError("DataFrame must contain 'High', 'Low', 'Open', 'Close', 'Volume' columns")
-
 
     # Dynamically set the cup window based on the length of the dataset
     cup_window = max(int(len(df) * cup_window_ratio), 20)  # Ensure a minimum size
@@ -40,13 +38,14 @@ def detect_cup_and_handle(df, cup_window_ratio=0.2):
         return None, None, None
 
 
-def plot_cup_and_handle(df, cup_start, handle_start, breakout_point):
+def plot_cup_and_handle(df, cup_start, handle_start, breakout_point, image_path='cup_and_handle_pattern.png'):
     """
-    Plots the cup and handle pattern.
+    Plots the cup and handle pattern and saves the plot as an image.
 
     Args:
         df (pd.DataFrame): Financial data.
         cup_start, handle_start, breakout_point (datetime): Indices for cup start, handle start, and breakout point.
+        image_path (str): The path to save the image.
     """
     plt.figure(figsize=(15, 7))
     plt.plot(df.index, df['Close'], label='Close Price')
@@ -57,15 +56,19 @@ def plot_cup_and_handle(df, cup_start, handle_start, breakout_point):
 
     # Plot the cup and handle
     plt.plot([cup_start, cup_end], [df.loc[cup_start, 'Close'], df.loc[cup_end, 'Close']], color='green', label='Cup')
-    plt.plot([handle_start, handle_end], [df.loc[handle_start, 'Close'], df.loc[handle_end, 'Close']], color='orange',
-             label='Handle')
+    plt.plot([handle_start, handle_end], [df.loc[handle_start, 'Close'], df.loc[handle_end, 'Close']], color='orange', label='Handle')
 
     # Mark the breakout point
     plt.scatter(breakout_point, df.loc[breakout_point, 'Close'], color='red', label='Breakout Point')
 
     plt.title('Cup and Handle Pattern')
     plt.legend()
-    plt.show()
+
+    # Save the plot as an image
+    plt.savefig(image_path)
+    plt.close()
+
+    return image_path
 
 
 def invokeCandH(df):
@@ -74,17 +77,17 @@ def invokeCandH(df):
 
     Args:
         df (pd.DataFrame): Financial data.
+    :return: Tuple containing a message and an image path if a pattern is detected, otherwise a message and None.
     """
     try:
         cup_start, handle_start, breakout_point = detect_cup_and_handle(df)
         if cup_start is not None and handle_start is not None and breakout_point is not None:
-            print("Potential Cup and Handle pattern detected.")
-            plot_cup_and_handle(df, cup_start, handle_start, breakout_point)
+            image_path = plot_cup_and_handle(df, cup_start, handle_start, breakout_point)
+            return "Potential Cup and Handle pattern detected.", image_path
         else:
-            print("No Cup and Handle Pattern found")
+            return "No Cup and Handle Pattern found.", None
     except ValueError as e:
-        print(f"Error: {e}")
+        return f"Error: {e}", None
 
 # Example usage:
-# df = pd.read_csv('your_data.csv')
-# invokeCandH(df)
+# result_message, image_path = invokeCandH(df)

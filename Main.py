@@ -1,14 +1,17 @@
-from AnalyzeData import analyze_data
 import yfinance as yf
 from datetime import datetime
+from TradingPDF import TradingReportPDF  # Import the PDF report class
+from AnalyzeData import analyze_data
+from algos import MA_AND_RSI as ma, RisingWedge as rw, CupAndHandle as cAndH, DoubleTop as dt, HeadAndShoulder as hands, \
+    AscendingPattern as ap, DoubleBottom as db
+import logging
+import os
+import glob
 
-import CupAndHandle as cAndH
-import DoubleBottom as doubleBottom
-import AscendingPattern as ap
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-import HeadAndShoulder as hands
-import DoubleTop as dt
-import RisingWedge as rw
+
 def fetch_data(ticker, start_date, end_date, interval):
     """
     Fetches historical data for a given ticker symbol from Yahoo Finance.
@@ -19,53 +22,118 @@ def fetch_data(ticker, start_date, end_date, interval):
     :param interval: The interval for the data (e.g., '1m', '15m', '1h', '1d', '1mo').
     :return: A DataFrame containing the historical data for the specified ticker and interval.
     """
-    data = yf.download(ticker, start=start_date, end=end_date, interval=interval)
-    return data
-
-# Example usage:
-# btc_data_15m = fetch_data('BTC-USD', '2023-12-01', '2024-01-01', '15m') DONT USE THIS WITHOUT MA ETC CONFIGURATION
-# btc_data_1h = fetch_data('BTC-USD', '2023-12-01', '2024-01-01', '1h') DONT USE THIS WITHOUT MA ETC CONFIGURATION
-# btc_data_1d = fetch_data('BTC-USD', '2020-01-01', '2024-01-01', '1d')
-# btc_data_1mo = fetch_data('BTC-USD', '2019-01-01', '2024-01-01', '1mo')
-
-# Note: The '1m' interval data is usually available for the past 7 days. For intervals like '15m' and '1h',
-# you might need to adjust the start_date closer to the end_date due to data availability.
+    try:
+        data = yf.download(ticker, start=start_date, end=end_date, interval=interval)
+        if data.empty:
+            logging.error("No data found for the given ticker and date range.")
+            raise ValueError("No data found for the given ticker and date range.")
+        return data
+    except Exception as e:
+        logging.error(f"Error fetching data: {e}")
+        raise
 
 
+def process_pattern(pdf, pattern_name, pattern_function, data):
+    """
+    Process a trading pattern by invoking its detection and adding the result to the PDF.
 
-print("Welcome To Trading Predictions..")
+    :param pdf: TradingReportPDF object.
+    :param pattern_name: The name of the pattern (e.g., "Cup and Handle").
+    :param pattern_function: The function that detects the pattern.
+    :param data: The financial data DataFrame.
+    """
+    # Add header for the pattern
+    pdf.add_title(pattern_name, level=2)
 
-# Ask the user for the ticker symbol
-ticker = input("Enter the ticker symbol (e.g., BTC-USD, press Enter for default 'BTC-USD'): ")
-if not ticker:
-    ticker = 'BTC-USD'
+    # Run the pattern detection
+    try:
+        result_message, image_path = pattern_function(data)
+        pdf.add_paragraph(result_message)
+        if image_path:
+            pdf.add_image(image_path)
+    except Exception as e:
+        logging.error(f"Error processing {pattern_name}: {e}")
+        pdf.add_paragraph(f"Error processing {pattern_name}: {e}")
 
-# Ask the user for the start date
-start_date = input("Enter the start date (YYYY-MM-DD, press Enter for default '2023-10-01'): ")
-if not start_date:
-    start_date = '2023-10-01'
+    # Add a line separator after each pattern result
+    pdf.add_line()
 
-# Ask the user for the end date
-end_date = input("Enter the end date (YYYY-MM-DD, press Enter for default today's date): ")
-if not end_date:
-    end_date = datetime.now().strftime('%Y-%m-%d')
 
-# Ask the user for the interval
-interval = input("Enter the interval (e.g., 1d, 1wk, 15min, press Enter for default '1d'): ")
-if not interval:
-    interval = '1d'
-# Fetch data based on user input
-data = fetch_data(ticker, start_date, end_date, interval)
+def main():
+    print("Trading Tool V1.1")
 
-result = analyze_data(data)
+    # Ask the user for the ticker symbol
+    ticker = input("Enter the ticker symbol (e.g., BTC-USD, press Enter for default 'BTC-USD'): ") or 'BTC-USD'
 
-#Bullish
-cAndH.invokeCandH(data)
-doubleBottom.invokeDoubleBottom(data)
-ap.invokeAscendingTriangle(data)
+    # Ask the user for the start date
+    start_date = input("Enter the start date (YYYY-MM-DD, press Enter for default '2023-10-01'): ") or '2023-10-01'
 
-#Bearish
-hands.invokeHeadAndShoulders(data)
-dt.invokeDoubleTop(data)
-rw.invokeRisingWedge(data)
-print(result)
+    # Ask the user for the end date
+    end_date = input("Enter the end date (YYYY-MM-DD, press Enter for default today's date): ") or datetime.now().strftime('%Y-%m-%d')
+
+    # Ask the user for the interval
+    interval = input("Enter the interval (e.g., 1d, 1wk, 15min, press Enter for default '1d'): ") or '1d'
+
+    # Fetch data based on user input
+    try:
+        data = fetch_data(ticker, start_date, end_date, interval)
+    except ValueError as e:
+        logging.error("Aborting due to data fetch error.")
+        return
+
+    # Create the PDF object
+    pdf = TradingReportPDF()
+
+    # Add a page to the PDF
+    pdf.add_page()
+
+    # Add a title and a paragraph to the report
+    pdf.add_title("Introduction")
+    pdf.add_paragraph("This report contains the results of various trading algorithms applied to market data.")
+
+    # Perform general data analysis
+    result = analyze_data(data)
+    pdf.add_algorithm_section("Data Analysis", [["Analysis Result", result]])
+
+    # Process different trading patterns
+    patterns = [
+        ("Moving Average and RSI Strategy", ma.invokeMARSI),
+        ("Cup and Handle", cAndH.invokeCandH),
+        ("Double Bottom", db.invokeDoubleBottom),
+        ("Ascending Triangle", ap.invokeAscendingTriangle),
+        ("Head and Shoulders", hands.invokeHeadAndShoulders),
+        ("Double Top", dt.invokeDoubleTop),
+        ("Rising Wedge", rw.invokeRisingWedge)
+    ]
+
+    for pattern_name, pattern_function in patterns:
+        logging.info(f"Processing pattern: {pattern_name}")
+        try:
+            process_pattern(pdf, pattern_name, pattern_function, data)
+        except Exception as e:
+            logging.error(f"Error processing {pattern_name}: {e}")
+            pdf.add_paragraph(f"Error processing {pattern_name}: {e}")
+
+    # Finalize the report
+    report_name = f"Trading_Report_{ticker}_{datetime.now().strftime('%Y%m%d')}.pdf"
+    pdf.finalize_report(report_name)
+    logging.info(f"Trading report saved as {report_name}")
+
+    # Delete all .png files after PDF generation
+    delete_generated_images()
+
+def delete_generated_images():
+    """
+    Deletes all .png files generated during the process.
+    """
+    png_files = glob.glob("*.png")  # Find all .png files in the current directory
+    for file in png_files:
+        try:
+            os.remove(file)
+            logging.info(f"Deleted image file: {file}")
+        except Exception as e:
+            logging.error(f"Error deleting file {file}: {e}")
+
+
+if __name__ == "__main__":
+    main()

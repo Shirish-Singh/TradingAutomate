@@ -1,11 +1,19 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.dates import date2num
-
-# Assume 'df' is a DataFrame with 'Date', 'High', 'Low', 'Open', 'Close', 'Volume'
-# Typically, you would load this data from a CSV file or financial API.
+import os
 
 def detect_double_bottom(df, min_distance_between_lows=30, min_depth=0.1):
+    """
+    Detects the Double Bottom pattern in a given financial DataFrame.
+
+    Args:
+        df (pd.DataFrame): Financial data containing 'High', 'Low', 'Open', 'Close', 'Volume'.
+        min_distance_between_lows (int): Minimum number of days between two lows to form a double bottom.
+        min_depth (float): Minimum depth of the lows from the highs as a percentage to qualify.
+
+    Returns:
+        Tuple: Indices for the first low, second low, and breakout point or (None, None, None) if not found.
+    """
     # Find local minimums in the 'Low' price
     lows = df['Low'].rolling(window=5, center=True).min()
     potential_lows = df['Low'] == lows
@@ -34,11 +42,16 @@ def detect_double_bottom(df, min_distance_between_lows=30, min_depth=0.1):
 
     return None, None, None
 
-# Example usage
-# first_low_date, second_low_date, breakout_date = detect_double_bottom(df)
 
+def plot_double_bottom(df, first_low, second_low, breakout_point, image_path='double_bottom_pattern.png'):
+    """
+    Plots the Double Bottom pattern and saves it as an image.
 
-def plot_double_bottom(df, first_low, second_low, breakout_point):
+    Args:
+        df (pd.DataFrame): Financial data.
+        first_low, second_low, breakout_point (datetime): Indices for the first low, second low, and breakout point.
+        image_path (str): The path to save the image.
+    """
     plt.figure(figsize=(12, 6))
     plt.plot(df['Close'], label='Close Price')
 
@@ -54,25 +67,31 @@ def plot_double_bottom(df, first_low, second_low, breakout_point):
     plt.ylabel('Price')
     plt.legend()
     plt.grid(True)
-    plt.show()
 
-# Example usage
-# plot_double_bottom(df, first_low_date, second_low_date, breakout_date)
+    # Save the plot as an image
+    plt.savefig(image_path)
+    plt.close()
 
-# Using the function
-# first_low, second_low, breakout_point = detect_double_bottom(df)
-# plot_double_bottom(df, first_low, second_low, breakout_point)
+    return image_path
+
 
 def invokeDoubleBottom(df):
-    # Detect the double bottom pattern
-    first_low, second_low, breakout_point = detect_double_bottom(df)
+    """
+    Invokes the detection and plotting of the Double Bottom pattern.
 
-    # If a pattern is detected, plot it
-    if first_low is not None and second_low is not None and breakout_point is not None:
-        print("Potential Double bottom pattern detected.")
-        plot_double_bottom(df, first_low, second_low, breakout_point)
-    else:
-        print("No double bottom pattern detected.")
+    Args:
+        df (pd.DataFrame): Financial data.
+    :return: Tuple containing a message and an image path if a pattern is detected, otherwise a message and None.
+    """
+    try:
+        first_low, second_low, breakout_point = detect_double_bottom(df)
+        if first_low is not None and second_low is not None and breakout_point is not None:
+            image_path = plot_double_bottom(df, first_low, second_low, breakout_point)
+            return "Potential Double Bottom pattern detected.", image_path
+        else:
+            return "No Double Bottom pattern detected.", None
+    except ValueError as e:
+        return f"Error: {e}", None
 
-# Example usage
-# invokeDoubleBottom(df)
+# Example usage:
+# result_message, image_path = invokeDoubleBottom(df)

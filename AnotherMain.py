@@ -1,9 +1,8 @@
 import yfinance as yf
 import mplfinance as mpf
-import pandas as pd
 
 from AnalysisConfig import AnalysisConfig
-from HeadAndShoulder import detect_head_and_shoulders
+from algos.HeadAndShoulder import detect_head_and_shoulders
 
 
 def technicalAnalysis(config):

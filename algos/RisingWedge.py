@@ -1,9 +1,18 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib.dates import date2num
 import numpy as np
+import os
+
 
 def detect_rising_wedge(df, window_size=20, angle_threshold=0.03):
+    """
+    Detects the Rising Wedge pattern in a given DataFrame.
+
+    :param df: DataFrame containing financial data.
+    :param window_size: The rolling window size to identify peaks and troughs.
+    :param angle_threshold: The minimum slope required to consider a rising trendline.
+    :return: A list of trendline points (peak_index, trough_index) and the breakdown point, if detected.
+    """
     peaks = df['High'].rolling(window=window_size, center=True).max()
     troughs = df['Low'].rolling(window=window_size, center=True).min()
 
@@ -37,13 +46,17 @@ def detect_rising_wedge(df, window_size=20, angle_threshold=0.03):
 
     return trendline_points, breakdown_point
 
-# Example usage
-# trendline_points, breakdown_point = detect_rising_wedge(df)
 
+def plot_rising_wedge(df, trendline_points, breakdown_point, image_path='rising_wedge_pattern.png'):
+    """
+    Plots the Rising Wedge pattern and saves the plot as an image.
 
-import matplotlib.pyplot as plt
-
-def plot_rising_wedge(df, trendline_points, breakdown_point):
+    :param df: DataFrame containing financial data.
+    :param trendline_points: List of trendline points (peak_index, trough_index).
+    :param breakdown_point: The breakdown point.
+    :param image_path: File path to save the plot image.
+    :return: The file path where the image is saved.
+    """
     plt.figure(figsize=(12, 6))
     plt.plot(df.index, df['Close'], label='Close Price')
 
@@ -60,24 +73,30 @@ def plot_rising_wedge(df, trendline_points, breakdown_point):
     plt.ylabel('Price')
     plt.legend()
     plt.grid(True)
-    plt.show()
 
-# Example usage
-# plot_rising_wedge(df, trendline_points, breakdown_point)
+    # Save the plot as an image
+    plt.savefig(image_path)
+    plt.close()
+
+    return image_path
+
+
 def invokeRisingWedge(df):
-    # Detect the Rising Wedge pattern
-    trendline_points, breakdown_point = detect_rising_wedge(df)
+    """
+    Invokes the detection of the Rising Wedge pattern and returns the result.
 
-    # If a pattern is detected, plot it
-    if trendline_points and breakdown_point:
-        print("Potential Rising Wedge pattern detected.")
-        plot_rising_wedge(df, trendline_points, breakdown_point)
-    else:
-        print("No Rising Wedge pattern detected.")
+    :param df: DataFrame containing financial data.
+    :return: Tuple containing a message and an image path if a pattern is detected, otherwise a message and None.
+    """
+    try:
+        # Detect the Rising Wedge pattern
+        trendline_points, breakdown_point = detect_rising_wedge(df)
 
-# Example usage
-# invokeRisingWedge(df)
-
-# Example usage
-# lower_trendline, breakdown_point = detect_rising_wedge(df)
-# plot_rising_wedge(df, lower_trendline, breakdown_point)
+        # If a pattern is detected, plot and save it
+        if trendline_points and breakdown_point:
+            image_path = plot_rising_wedge(df, trendline_points, breakdown_point)
+            return "Potential Rising Wedge pattern detected.", image_path
+        else:
+            return "No Rising Wedge pattern detected.", None
+    except Exception as e:
+        return f"Error during Rising Wedge detection: {e}", None
