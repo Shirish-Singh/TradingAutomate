@@ -1,7 +1,7 @@
 import yfinance as yf
 from datetime import datetime
 from TradingPDF import TradingReportPDF  # Import the PDF report class
-from AnalyzeData import analyze_data
+from algos.AnalyzeData import analyze_data
 from algos import MA_AND_RSI as ma, RisingWedge as rw, CupAndHandle as cAndH, DoubleTop as dt, HeadAndShoulder as hands, \
     AscendingPattern as ap, DoubleBottom as db
 import logging
@@ -91,10 +91,24 @@ def main():
     pdf.add_title("Introduction")
     pdf.add_paragraph("This report contains the results of various trading algorithms applied to market data.")
 
-    # Perform general data analysis
-    result = analyze_data(data)
-    pdf.add_algorithm_section("Data Analysis", [["Analysis Result", result]])
+    # Add user input summary to the PDF
+    pdf.add_title("User Inputs")
 
+    pdf.add_paragraph(f"Ticker Symbol: {ticker}\n"
+                      f"Start Date: {start_date}\n"
+                      f"End Date: {end_date}\n"
+                      f"Interval: {interval}\n"
+                      f"Duration: { calculate_duration(start_date, end_date)}\n")
+
+    # Perform general data analysis
+    signal, confidence, explanation = analyze_data(data)
+
+    # Add analysis results to the PDF (splitting out each result)
+    pdf.add_title("Data Analysis Results - DYOR")
+    # Combine signal, confidence, and explanation into a single paragraph
+    pdf.add_paragraph(f"Signal: {signal}\n"
+                      f"Confidence Level: {confidence:.2f}%\n"
+                      f"Explanation: {explanation}")
     # Process different trading patterns
     patterns = [
         ("Moving Average and RSI Strategy", ma.invokeMARSI),
@@ -134,6 +148,26 @@ def delete_generated_images():
         except Exception as e:
             logging.error(f"Error deleting file {file}: {e}")
 
+
+def calculate_duration(start_date, end_date):
+    """
+    Calculates the duration between the start and end dates in a human-readable format (days, months, or years).
+    """
+    start = datetime.strptime(start_date, "%Y-%m-%d")
+    end = datetime.strptime(end_date, "%Y-%m-%d")
+
+    delta = end - start
+    days = delta.days
+
+    # Determine the duration in days, months, or years
+    if days < 30:
+        return f"{days} days"
+    elif days < 365:
+        months = days // 30
+        return f"{months} months"
+    else:
+        years = days // 365
+        return f"{years} years"
 
 if __name__ == "__main__":
     main()
