@@ -1,6 +1,8 @@
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import os
+from algos.fibonacci_calculator import FibonacciCalculator
 
 def detect_double_bottom(df, min_distance_between_lows=30, min_depth=0.1):
     """
@@ -42,14 +44,14 @@ def detect_double_bottom(df, min_distance_between_lows=30, min_depth=0.1):
 
     return None, None, None
 
-
-def plot_double_bottom(df, first_low, second_low, breakout_point, image_path='double_bottom_pattern.png'):
+def plot_double_bottom_with_fibonacci(df, first_low, second_low, breakout_point, fib_targets, image_path='double_bottom_with_fibonacci.png'):
     """
-    Plots the Double Bottom pattern and saves it as an image.
+    Plots the Double Bottom pattern with Fibonacci levels and saves it as an image.
 
     Args:
         df (pd.DataFrame): Financial data.
         first_low, second_low, breakout_point (datetime): Indices for the first low, second low, and breakout point.
+        fib_targets (dict): Fibonacci retracement and extension levels.
         image_path (str): The path to save the image.
     """
     plt.figure(figsize=(12, 6))
@@ -62,7 +64,11 @@ def plot_double_bottom(df, first_low, second_low, breakout_point, image_path='do
     # Highlight the breakout point
     plt.scatter(breakout_point, df.at[breakout_point, 'Close'], color='green', label='Breakout Point')
 
-    plt.title('Double Bottom Pattern')
+    # Plot Fibonacci targets
+    for target_name, target_price in fib_targets.items():
+        plt.axhline(y=target_price, color='blue', linestyle='--', label=f'{target_name}: {target_price:.2f}')
+
+    plt.title('Double Bottom Pattern with Fibonacci Targets')
     plt.xlabel('Date')
     plt.ylabel('Price')
     plt.legend()
@@ -74,24 +80,29 @@ def plot_double_bottom(df, first_low, second_low, breakout_point, image_path='do
 
     return image_path
 
-
 def invokeDoubleBottom(df):
     """
-    Invokes the detection and plotting of the Double Bottom pattern.
+    Invokes the detection of the Double Bottom pattern and calculates dynamic Fibonacci targets.
 
     Args:
         df (pd.DataFrame): Financial data.
     :return: Tuple containing a message and an image path if a pattern is detected, otherwise a message and None.
     """
     try:
+        # Detect the Double Bottom pattern
         first_low, second_low, breakout_point = detect_double_bottom(df)
+        
         if first_low is not None and second_low is not None and breakout_point is not None:
-            image_path = plot_double_bottom(df, first_low, second_low, breakout_point)
-            return "Potential Double Bottom pattern detected.", image_path
+            # Create FibonacciCalculator instance
+            fib_calculator = FibonacciCalculator(df)
+
+            # Calculate dynamic Fibonacci levels
+            fib_targets = fib_calculator.calculate_all_fibonacci_levels(first_low, second_low, breakout_point)
+
+            # Plot the double bottom pattern along with Fibonacci targets
+            image_path = plot_double_bottom_with_fibonacci(df, first_low, second_low, breakout_point, fib_targets)
+            return f"Potential Double Bottom pattern detected with dynamic Fibonacci targets: {fib_targets}", image_path
         else:
             return "No Double Bottom pattern detected.", None
     except ValueError as e:
         return f"Error: {e}", None
-
-# Example usage:
-# result_message, image_path = invokeDoubleBottom(df)

@@ -2,11 +2,12 @@ import yfinance as yf
 from datetime import datetime
 from TradingPDF import TradingReportPDF  # Import the PDF report class
 from algos.AnalyzeData import analyze_data
-from algos import MA_AND_RSI as ma, RisingWedge as rw, CupAndHandle as cAndH, DoubleTop as dt, HeadAndShoulder as hands, \
-    AscendingPattern as ap, DoubleBottom as db
+from algos.fibonacci_calculator import FibonacciCalculator
+from algos import MA_AND_RSI as ma, RisingWedge as rw, CupAndHandle as cAndH, DoubleTop as dt, HeadAndShoulder as hands, AscendingPattern as ap, DoubleBottom as db, FallingWedge as fw
 import logging
 import os
 import glob
+from algos.fibonacci_calculator import FibonacciCalculator
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -117,7 +118,9 @@ def main():
         ("Ascending Triangle", ap.invokeAscendingTriangle),
         ("Head and Shoulders", hands.invokeHeadAndShoulders),
         ("Double Top", dt.invokeDoubleTop),
-        ("Rising Wedge", rw.invokeRisingWedge)
+        ("Rising Wedge", rw.invokeRisingWedge),
+        ("Falling Wedge", fw.invokeFallingWedge)
+
     ]
 
     for pattern_name, pattern_function in patterns:

@@ -63,7 +63,7 @@ def plot_head_and_shoulders(df, left_shoulder, head, right_shoulder, neckline, b
     # Highlight the breakdown point
     plt.scatter(breakdown_point, df.at[breakdown_point, 'Low'], color='purple', label='Breakdown Point')
 
-    plt.title('Head and Shoulders Pattern')
+    plt.title('Head and Shoulders Pattern: Bearish Signal')
     plt.xlabel('Date')
     plt.ylabel('Price')
     plt.legend()

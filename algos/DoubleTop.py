@@ -59,7 +59,7 @@ def plot_double_top(df, first_top, second_top, support_level, breakdown_point, i
     # Highlight the breakdown point
     plt.scatter(breakdown_point, df.at[breakdown_point, 'Low'], color='green', label='Breakdown Point')
 
-    plt.title('Double Top Pattern')
+    plt.title('Double Top Pattern: Bearish Signal')
     plt.xlabel('Date')
     plt.ylabel('Price')
     plt.legend()

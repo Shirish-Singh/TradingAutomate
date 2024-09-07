@@ -68,7 +68,7 @@ def plot_rising_wedge(df, trendline_points, breakdown_point, image_path='rising_
     # Highlight the breakdown point
     plt.scatter(breakdown_point, df['Low'].loc[breakdown_point], color='green', label='Breakdown Point')
 
-    plt.title('Rising Wedge Pattern')
+    plt.title('Rising Wedge Pattern: Bearish Signal')
     plt.xlabel('Date')
     plt.ylabel('Price')
     plt.legend()
