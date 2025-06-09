@@ -1,5 +1,44 @@
 import numpy as np
-import talib
+import pandas as pd
+from ta.trend import SMAIndicator
+from ta.momentum import RSIIndicator
+from ta.trend import MACD
+
+def safe_float(value):
+    """
+    Safely convert a value to float, handling pandas Series objects.
+    
+    Args:
+        value: Value to convert to float, could be a pandas Series, DataFrame, or scalar
+        
+    Returns:
+        float: The converted float value
+    """
+    if isinstance(value, pd.Series):
+        if len(value) == 0:
+            return 0.0
+        return safe_float(value.iloc[0])
+    elif isinstance(value, pd.DataFrame):
+        if value.empty:
+            return 0.0
+        return safe_float(value.iloc[0, 0])
+    return float(value)
+
+
+def ensure_aligned(left, right):
+    """
+    Ensure two pandas Series or DataFrames are aligned before operations.
+    
+    Args:
+        left: First pandas Series or DataFrame
+        right: Second pandas Series or DataFrame
+        
+    Returns:
+        tuple: (aligned_left, aligned_right)
+    """
+    if hasattr(left, 'align') and hasattr(right, 'align'):
+        return left.align(right, axis=0, copy=False)
+    return left, right
 
 def analyze_data(data):
     """
@@ -12,19 +51,37 @@ def analyze_data(data):
         Tuple: A string signal ('Buy', 'Sell', 'Hold'), a confidence level (float), and an explanation (string).
     """
     try:
+        # Make a copy of the data to avoid modifying the original
+        df = data.copy()
+        
+        # Check if we have enough data
+        if len(df) < 50:  # Need at least 50 data points for reliable indicators
+            return "Insufficient data", 0, "Not enough historical data to perform reliable analysis."
+        
         # Calculate indicators (SMA, RSI, MACD)
-        data['SMA20'] = talib.SMA(data['Close'], timeperiod=20)
-        data['SMA50'] = talib.SMA(data['Close'], timeperiod=50)
-        data['RSI'] = talib.RSI(data['Close'], timeperiod=14)
-        data['MACD'], data['MACD_signal'], _ = talib.MACD(data['Close'], fastperiod=12, slowperiod=26, signalperiod=9)
+        df['SMA20'] = SMAIndicator(df['Close'], window=20).sma_indicator()
+        df['SMA50'] = SMAIndicator(df['Close'], window=50).sma_indicator()
+        df['RSI'] = RSIIndicator(df['Close'], window=14).rsi()
+        
+        # Calculate MACD
+        macd = MACD(df['Close'], window_slow=26, window_fast=12, window_sign=9)
+        df['MACD'] = macd.macd()
+        df['MACD_signal'] = macd.macd_signal()
+
+        # Drop NaN values that might cause issues
+        df = df.dropna()
+        
+        # If after dropping NaNs we don't have enough data, return early
+        if len(df) < 5:
+            return "Insufficient data after processing", 0, "Not enough valid data points after calculating indicators."
 
         # Get the latest indicator values
-        last_sma20 = data['SMA20'].iloc[-1]
-        last_sma50 = data['SMA50'].iloc[-1]
-        last_close = data['Close'].iloc[-1]
-        last_rsi = data['RSI'].iloc[-1]
-        last_macd = data['MACD'].iloc[-1]
-        last_macdsignal = data['MACD_signal'].iloc[-1]
+        last_sma20 = safe_float(df['SMA20'].iloc[-1])
+        last_sma50 = safe_float(df['SMA50'].iloc[-1])
+        last_close = safe_float(df['Close'].iloc[-1])
+        last_rsi = safe_float(df['RSI'].iloc[-1])
+        last_macd = safe_float(df['MACD'].iloc[-1])
+        last_macdsignal = safe_float(df['MACD_signal'].iloc[-1])
 
         # Initialize signal counters
         buy_signals = 0
@@ -33,10 +90,10 @@ def analyze_data(data):
         # Check SMA for buy or sell signals
         if np.isnan(last_sma20) or np.isnan(last_sma50):
             sma_signal = 'Unknown'
-        elif last_close > last_sma20 > last_sma50:
+        elif last_close > last_sma20 and last_sma20 > last_sma50:
             buy_signals += 1
             sma_signal = 'Bullish'
-        elif last_close < last_sma20 < last_sma50:
+        elif last_close < last_sma20 and last_sma20 < last_sma50:
             sell_signals += 1
             sma_signal = 'Bearish'
         else:

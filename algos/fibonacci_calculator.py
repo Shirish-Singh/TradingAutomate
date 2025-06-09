@@ -1,18 +1,55 @@
 
 import pandas as pd
 
+def safe_float(value):
+    """
+    Safely convert a value to float, handling pandas Series objects.
+    
+    Args:
+        value: Value to convert to float, could be a pandas Series, DataFrame, or scalar
+        
+    Returns:
+        float: The converted float value
+    """
+    if isinstance(value, pd.Series):
+        if len(value) == 0:
+            return 0.0
+        return safe_float(value.iloc[0])
+    elif isinstance(value, pd.DataFrame):
+        if value.empty:
+            return 0.0
+        return safe_float(value.iloc[0, 0])
+    return float(value)
+
+
+def ensure_aligned(left, right):
+    """
+    Ensure two pandas Series or DataFrames are aligned before operations.
+    
+    Args:
+        left: First pandas Series or DataFrame
+        right: Second pandas Series or DataFrame
+        
+    Returns:
+        tuple: (aligned_left, aligned_right)
+    """
+    if hasattr(left, 'align') and hasattr(right, 'align'):
+        return left.align(right, axis=0, copy=False)
+    return left, right
+
+
 class FibonacciCalculator:
     """
     A class that handles the calculation of Fibonacci retracement and extension levels for trading charts.
     """
 
-    def __init__(self, df: pd.DataFrame):
+    def __init__(self, df=None):
         """
         Initializes the FibonacciCalculator with a given DataFrame.
 
         :param df: DataFrame containing financial data with 'High' and 'Low' columns.
         """
-        self.df = df
+        self.df = df if df is not None else pd.DataFrame()
 
     def calculate_fibonacci_levels(self, swing_low_index, swing_high_index):
         """
