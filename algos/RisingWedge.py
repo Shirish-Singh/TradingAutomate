@@ -4,377 +4,402 @@ import numpy as np
 import os
 
 def safe_float(value):
-    """
-    Safely convert a value to float, handling pandas Series objects.
-    
-    Args:
-        value: Value to convert to float, could be a pandas Series, DataFrame, or scalar
-        
-    Returns:
-        float: The converted float value
-    """
-    if isinstance(value, pd.Series):
-        if len(value) == 0:
+    """Safely convert any value to float."""
+    try:
+        if pd.isna(value):
             return 0.0
-        return safe_float(value.iloc[0])
-    elif isinstance(value, pd.DataFrame):
-        if value.empty:
-            return 0.0
-        return safe_float(value.iloc[0, 0])
-    return float(value)
-def ensure_aligned(left, right):
-    """
-    Ensure two pandas Series or DataFrames are aligned before operations.
-    
-    Args:
-        left: First pandas Series or DataFrame
-        right: Second pandas Series or DataFrame
-        
-    Returns:
-        tuple: (aligned_left, aligned_right)
-    """
-    import pandas as pd
-    
-    # Handle scalar values
-    if not isinstance(left, (pd.Series, pd.DataFrame)) or not isinstance(right, (pd.Series, pd.DataFrame)):
-        return left, right
-        
-    # Handle empty Series/DataFrames
-    if (isinstance(left, pd.Series) and len(left) == 0) or (isinstance(left, pd.DataFrame) and left.empty):
-        return 0.0, right
-    if (isinstance(right, pd.Series) and len(right) == 0) or (isinstance(right, pd.DataFrame) and right.empty):
-        return left, 0.0
-    
-    # Align Series/DataFrames
-    if hasattr(left, 'align') and hasattr(right, 'align'):
-        try:
-            # For Series objects, align on index
-            if isinstance(left, pd.Series) and isinstance(right, pd.Series):
-                left_aligned, right_aligned = left.align(right, axis=0, copy=False)
-                return left_aligned, right_aligned
-            # For DataFrame objects, align on both axes
-            elif isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
-                left_aligned, right_aligned = left.align(right, axis=None, copy=False)
-                return left_aligned, right_aligned
-            # For mixed types, convert to compatible types
-            else:
-                # If one is Series and one is DataFrame, convert Series to DataFrame
-                if isinstance(left, pd.Series) and isinstance(right, pd.DataFrame):
-                    left = pd.DataFrame(left)
-                elif isinstance(left, pd.DataFrame) and isinstance(right, pd.Series):
-                    right = pd.DataFrame(right)
-                left_aligned, right_aligned = left.align(right, axis=None, copy=False)
-                return left_aligned, right_aligned
-        except Exception as e:
-            # If alignment fails, convert to scalar values as a fallback
-            if isinstance(left, (pd.Series, pd.DataFrame)):
-                left_val = left.iloc[0] if isinstance(left, pd.Series) else left.iloc[0, 0]
-            else:
-                left_val = left
-                
-            if isinstance(right, (pd.Series, pd.DataFrame)):
-                right_val = right.iloc[0] if isinstance(right, pd.Series) else right.iloc[0, 0]
-            else:
-                right_val = right
-                
-            return left_val, right_val
-    
-    return left, right
-
-        
-    # Handle empty Series/DataFrames
-    if (isinstance(left, pd.Series) and len(left) == 0) or (isinstance(left, pd.DataFrame) and left.empty):
-        return 0.0, right
-    if (isinstance(right, pd.Series) and len(right) == 0) or (isinstance(right, pd.DataFrame) and right.empty):
-        return left, 0.0
-    
-    # Align Series/DataFrames
-    if hasattr(left, 'align') and hasattr(right, 'align'):
-        try:
-            return left.align(right, axis=0, copy=False)
-        except Exception as e:
-            # If alignment fails, convert to scalar values as a fallback
-            if isinstance(left, (pd.Series, pd.DataFrame)):
-                left_val = left.iloc[0] if isinstance(left, pd.Series) else left.iloc[0, 0]
-            else:
-                left_val = left
-                
-            if isinstance(right, (pd.Series, pd.DataFrame)):
-                right_val = right.iloc[0] if isinstance(right, pd.Series) else right.iloc[0, 0]
-            else:
-                right_val = right
-                
-            return left_val, right_val
-    
-    return left, right
-
+        return float(value)
+    except (ValueError, TypeError):
+        return 0.0
 
 def detect_rising_wedge(df, window_size=5, min_points=3):
-
-    # Check if DataFrame has required columns
-    required_columns = ['High', 'Low', 'Open', 'Close']
-    if not all(col in df.columns for col in required_columns):
-        return None, None, None, None
-        
     """
     Detects the Rising Wedge pattern in a given DataFrame.
-
-    :param df: DataFrame containing financial data.
-    :param window_size: The rolling window size to identify peaks and troughs.
-    :param min_points: Minimum number of points required to confirm a pattern.
-    :return: A tuple containing upper trendline points, lower trendline points, and the breakdown point.
-    """
-    # Make a copy of the dataframe to avoid modifying the original
-    df_copy = df.copy()
     
-    # Make sure we have enough data
-    if len(df_copy) < window_size * 3:
+    Args:
+        df: DataFrame with columns ['High', 'Low', 'Open', 'Close']
+        window_size: Rolling window for peak/trough detection
+        min_points: Minimum points needed for trendline
+    
+    Returns:
+        tuple: (upper_trendline_indices, lower_trendline_indices, breakdown_index)
+    """
+    
+    # Validate input
+    required_cols = ['High', 'Low', 'Open', 'Close']
+    if not all(col in df.columns for col in required_cols):
         return [], [], None
     
-    # Find local maximums and minimums
-    df_copy['rolling_max'] = df_copy['High'].rolling(window=window_size, center=True).max()
-    df_copy['rolling_min'] = df_copy['Low'].rolling(window=window_size, center=True).min()
+    if len(df) < window_size * 3:
+        return [], [], None
     
-    # Identify peaks and troughs using boolean masks
-    peak_mask = df_copy['High'] == df_copy['rolling_max']
-    trough_mask = df_copy['Low'] == df_copy['rolling_min']
+    # Convert to simple arrays for processing
+    high_values = df['High'].values.astype(float)
+    low_values = df['Low'].values.astype(float)
+    close_values = df['Close'].values.astype(float)
+    indices = list(df.index)
     
-    peaks = df_copy[peak_mask]
-    troughs = df_copy[trough_mask]
+    # Remove any NaN values
+    valid_mask = ~(np.isnan(high_values) | np.isnan(low_values) | np.isnan(close_values))
+    if not np.any(valid_mask):
+        return [], [], None
+    
+    # Find local peaks and troughs using rolling windows
+    peaks = []
+    troughs = []
+    
+    half_window = window_size // 2
+    
+    for i in range(half_window, len(high_values) - half_window):
+        if not valid_mask[i]:
+            continue
+            
+        # Check if current point is a local maximum
+        is_peak = True
+        for j in range(max(0, i - half_window), min(len(high_values), i + half_window + 1)):
+            if j != i and valid_mask[j] and high_values[j] > high_values[i]:
+                is_peak = False
+                break
+        
+        if is_peak:
+            peaks.append((i, indices[i], high_values[i]))
+        
+        # Check if current point is a local minimum
+        is_trough = True
+        for j in range(max(0, i - half_window), min(len(low_values), i + half_window + 1)):
+            if j != i and valid_mask[j] and low_values[j] < low_values[i]:
+                is_trough = False
+                break
+        
+        if is_trough:
+            troughs.append((i, indices[i], low_values[i]))
     
     if len(peaks) < min_points or len(troughs) < min_points:
         return [], [], None
     
-    # Get peak and trough indices
-    peak_indices = peaks.index.tolist()
-    trough_indices = troughs.index.tolist()
+    # Find best upper trendline (positive slope)
+    best_upper_line = None
+    best_upper_r2 = -1
     
-    # Find upper and lower trendlines
-    upper_trendline = []
-    lower_trendline = []
+    for start_idx in range(len(peaks) - min_points + 1):
+        for end_idx in range(start_idx + min_points - 1, len(peaks)):
+            selected_peaks = peaks[start_idx:end_idx + 1]
+            
+            if len(selected_peaks) < min_points:
+                continue
+            
+            x_vals = [p[0] for p in selected_peaks]  # position indices
+            y_vals = [p[2] for p in selected_peaks]  # high values
+            
+            if len(x_vals) >= 2:
+                try:
+                    # Fit line and calculate R-squared
+                    coeffs = np.polyfit(x_vals, y_vals, 1)
+                    slope, intercept = coeffs[0], coeffs[1]
+                    
+                    # Check if slope is positive (rising)
+                    if slope > 0:
+                        # Calculate R-squared
+                        y_pred = [slope * x + intercept for x in x_vals]
+                        ss_res = sum((y_vals[i] - y_pred[i]) ** 2 for i in range(len(y_vals)))
+                        ss_tot = sum((y_vals[i] - np.mean(y_vals)) ** 2 for i in range(len(y_vals)))
+                        r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+                        
+                        if r2 > best_upper_r2:
+                            best_upper_r2 = r2
+                            best_upper_line = {
+                                'peaks': selected_peaks,
+                                'slope': slope,
+                                'intercept': intercept,
+                                'r2': r2
+                            }
+                except:
+                    continue
     
-    # Try to find at least min_points peaks that form an upward sloping line
-    for i in range(len(peak_indices) - (min_points - 1)):
-        potential_peaks = peak_indices[i:i+min_points]
-        x_values = [df_copy.index.get_loc(idx) for idx in potential_peaks]
-        y_values = [safe_float(df_copy.loc[idx, 'High']) for idx in potential_peaks]
-        
-        # Calculate slope of upper trendline
-        slope_upper, intercept_upper = np.polyfit(x_values, y_values, 1)
-        
-        # For a rising wedge, the upper trendline should have a positive slope
-        if safe_float(slope_upper) > 0:
-            upper_trendline = potential_peaks
-            break
-    
-    # If we couldn't find a valid upper trendline, return empty
-    if not upper_trendline:
+    if best_upper_line is None:
         return [], [], None
     
-    # Try to find at least min_points troughs that form an upward sloping line
-    for i in range(len(trough_indices) - (min_points - 1)):
-        potential_troughs = trough_indices[i:i+min_points]
-        x_values = [df_copy.index.get_loc(idx) for idx in potential_troughs]
-        y_values = [safe_float(df_copy.loc[idx, 'Low']) for idx in potential_troughs]
-        
-        # Calculate slope of lower trendline
-        slope_lower, intercept_lower = np.polyfit(x_values, y_values, 1)
-        
-        # For a rising wedge, the lower trendline should have a positive slope
-        if safe_float(slope_lower) > 0:
-            lower_trendline = potential_troughs
-            break
+    # Find best lower trendline (positive slope, steeper than upper)
+    best_lower_line = None
+    best_lower_r2 = -1
     
-    # If we couldn't find a valid lower trendline, return empty
-    if not lower_trendline:
+    for start_idx in range(len(troughs) - min_points + 1):
+        for end_idx in range(start_idx + min_points - 1, len(troughs)):
+            selected_troughs = troughs[start_idx:end_idx + 1]
+            
+            if len(selected_troughs) < min_points:
+                continue
+            
+            x_vals = [t[0] for t in selected_troughs]  # position indices
+            y_vals = [t[2] for t in selected_troughs]  # low values
+            
+            if len(x_vals) >= 2:
+                try:
+                    # Fit line and calculate R-squared
+                    coeffs = np.polyfit(x_vals, y_vals, 1)
+                    slope, intercept = coeffs[0], coeffs[1]
+                    
+                    # Check if slope is positive and steeper than upper line
+                    if slope > 0 and slope > best_upper_line['slope']:
+                        # Calculate R-squared
+                        y_pred = [slope * x + intercept for x in x_vals]
+                        ss_res = sum((y_vals[i] - y_pred[i]) ** 2 for i in range(len(y_vals)))
+                        ss_tot = sum((y_vals[i] - np.mean(y_vals)) ** 2 for i in range(len(y_vals)))
+                        r2 = 1 - (ss_res / ss_tot) if ss_tot > 0 else 0
+                        
+                        if r2 > best_lower_r2:
+                            best_lower_r2 = r2
+                            best_lower_line = {
+                                'troughs': selected_troughs,
+                                'slope': slope,
+                                'intercept': intercept,
+                                'r2': r2
+                            }
+                except:
+                    continue
+    
+    if best_lower_line is None:
         return [], [], None
     
-    # Calculate slopes of both trendlines to confirm converging pattern
-    x_upper = [df_copy.index.get_loc(idx) for idx in upper_trendline]
-    y_upper = [safe_float(df_copy.loc[idx, 'High']) for idx in upper_trendline]
-    slope_upper, intercept_upper = np.polyfit(x_upper, y_upper, 1)
+    # Extract the indices for return
+    upper_trendline = [p[1] for p in best_upper_line['peaks']]  # original indices
+    lower_trendline = [t[1] for t in best_lower_line['troughs']]  # original indices
     
-    x_lower = [df_copy.index.get_loc(idx) for idx in lower_trendline]
-    y_lower = [safe_float(df_copy.loc[idx, 'Low']) for idx in lower_trendline]
-    slope_lower, intercept_lower = np.polyfit(x_lower, y_lower, 1)
-    
-    # For a rising wedge, the lower trendline should have a steeper slope than the upper trendline
-    if safe_float(slope_lower) <= safe_float(slope_upper):
-        return [], [], None
-    
-    # Look for breakdown after the pattern formation
-    last_point = max(upper_trendline[-1], lower_trendline[-1])
-    after_pattern = df_copy.loc[last_point:].iloc[1:]  # Start from the next point
-    
+    # Look for breakdown point
     breakdown_point = None
     
-    # Check for breakdown below the lower trendline
-    for idx, row in after_pattern.iterrows():
-        x_pos = df_copy.index.get_loc(idx)
-        
-        # Calculate the projected lower trendline value at this point
-        if x_pos >= 0:
-            projected_lower_trendline = safe_float(slope_lower) * x_pos + safe_float(intercept_lower)
-            current_close = safe_float(row['Close'])
+    # Find the last point of the pattern
+    last_upper_pos = max(p[0] for p in best_upper_line['peaks'])
+    last_lower_pos = max(t[0] for t in best_lower_line['troughs'])
+    last_pattern_pos = max(last_upper_pos, last_lower_pos)
+    
+    # Check for breakdown after the pattern
+    lower_slope = best_lower_line['slope']
+    lower_intercept = best_lower_line['intercept']
+    
+    for i in range(last_pattern_pos + 1, len(close_values)):
+        if not valid_mask[i]:
+            continue
             
-            # Check if price breaks below the lower trendline
-            if current_close < projected_lower_trendline:
-                breakdown_point = idx
+        try:
+            projected_lower = lower_slope * i + lower_intercept
+            if close_values[i] < projected_lower:
+                breakdown_point = indices[i]
                 break
+        except:
+            continue
     
     return upper_trendline, lower_trendline, breakdown_point
 
 def plot_rising_wedge(df, upper_trendline, lower_trendline, breakdown_point, image_path='rising_wedge_pattern.png'):
     """
-    Plots the Rising Wedge pattern and saves the plot as an image.
-
-    :param df: DataFrame containing financial data.
-    :param upper_trendline: List of indices for the upper trendline points.
-    :param lower_trendline: List of indices for the lower trendline points.
-    :param breakdown_point: The breakdown point index.
-    :param image_path: File path to save the plot image.
-    :return: The file path where the image is saved.
+    Plot the Rising Wedge pattern.
     """
     try:
-        # Create a copy of the dataframe to avoid modifying the original
-        df_copy = df.copy()
-        
-        plt.figure(figsize=(12, 6))
+        plt.figure(figsize=(14, 8))
         
         # Plot price data
-        plt.plot(df_copy.index, df_copy['Close'], label='Close Price')
+        plt.plot(df.index, df['Close'], label='Close Price', linewidth=1.5, color='black', alpha=0.7)
         
         # Plot upper trendline
-        if upper_trendline:
-            # Highlight the upper trendline points
-            plt.scatter([idx for idx in upper_trendline], [df_copy.loc[idx, 'High'] for idx in upper_trendline], 
-                        color='red', s=50)
-            
-            # Calculate the best fit line for upper trendline
-            x_upper = [df_copy.index.get_loc(idx) for idx in upper_trendline]
-            y_upper = [safe_float(df_copy.loc[idx, 'High']) for idx in upper_trendline]
-            slope_upper, intercept_upper = np.polyfit(x_upper, y_upper, 1)
-            
-            # Plot the extended upper trendline
-            x_range = range(df_copy.index.get_loc(upper_trendline[0]), df_copy.index.get_loc(df_copy.index[-1]) + 1)
-            y_fit_upper = [safe_float(slope_upper) * x + safe_float(intercept_upper) for x in x_range]
-            
-            # Convert x_range back to datetime indices
-            x_datetime = [df_copy.index[x] for x in x_range]
-            plt.plot(x_datetime, y_fit_upper, 'r--', linewidth=1.5, label='Upper Trendline')
+        if len(upper_trendline) >= 2:
+            try:
+                # Get values for upper trendline
+                upper_x = []
+                upper_y = []
+                for idx in upper_trendline:
+                    if idx in df.index:
+                        upper_x.append(idx)
+                        upper_y.append(safe_float(df.loc[idx, 'High']))
+                
+                if len(upper_x) >= 2:
+                    # Plot points
+                    plt.scatter(upper_x, upper_y, color='red', s=80, label='Upper Peaks', zorder=5, alpha=0.8)
+                    
+                    # Create extended trendline
+                    # Convert indices to positions for fitting
+                    pos_x = [list(df.index).index(idx) for idx in upper_x]
+                    
+                    if len(pos_x) >= 2:
+                        slope, intercept = np.polyfit(pos_x, upper_y, 1)
+                        
+                        # Extend line across chart
+                        start_pos = 0
+                        end_pos = len(df) - 1
+                        line_x_pos = list(range(start_pos, end_pos + 1))
+                        line_y = [slope * x + intercept for x in line_x_pos]
+                        line_x_idx = [df.index[x] for x in line_x_pos]
+                        
+                        plt.plot(line_x_idx, line_y, 'r--', linewidth=2, label='Upper Trendline', alpha=0.8)
+            except Exception as e:
+                print(f"Error plotting upper trendline: {e}")
         
         # Plot lower trendline
-        if lower_trendline:
-            # Highlight the lower trendline points
-            plt.scatter([idx for idx in lower_trendline], [df_copy.loc[idx, 'Low'] for idx in lower_trendline], 
-                        color='blue', s=50)
-            
-            # Calculate the best fit line for lower trendline
-            x_lower = [df_copy.index.get_loc(idx) for idx in lower_trendline]
-            y_lower = [safe_float(df_copy.loc[idx, 'Low']) for idx in lower_trendline]
-            slope_lower, intercept_lower = np.polyfit(x_lower, y_lower, 1)
-            
-            # Plot the extended lower trendline
-            x_range = range(df_copy.index.get_loc(lower_trendline[0]), df_copy.index.get_loc(df_copy.index[-1]) + 1)
-            y_fit_lower = [safe_float(slope_lower) * x + safe_float(intercept_lower) for x in x_range]
-            
-            # Convert x_range back to datetime indices
-            x_datetime = [df_copy.index[x] for x in x_range]
-            plt.plot(x_datetime, y_fit_lower, 'b--', linewidth=1.5, label='Lower Trendline')
+        if len(lower_trendline) >= 2:
+            try:
+                # Get values for lower trendline
+                lower_x = []
+                lower_y = []
+                for idx in lower_trendline:
+                    if idx in df.index:
+                        lower_x.append(idx)
+                        lower_y.append(safe_float(df.loc[idx, 'Low']))
+                
+                if len(lower_x) >= 2:
+                    # Plot points
+                    plt.scatter(lower_x, lower_y, color='blue', s=80, label='Lower Troughs', zorder=5, alpha=0.8)
+                    
+                    # Create extended trendline
+                    # Convert indices to positions for fitting
+                    pos_x = [list(df.index).index(idx) for idx in lower_x]
+                    
+                    if len(pos_x) >= 2:
+                        slope, intercept = np.polyfit(pos_x, lower_y, 1)
+                        
+                        # Extend line across chart
+                        start_pos = 0
+                        end_pos = len(df) - 1
+                        line_x_pos = list(range(start_pos, end_pos + 1))
+                        line_y = [slope * x + intercept for x in line_x_pos]
+                        line_x_idx = [df.index[x] for x in line_x_pos]
+                        
+                        plt.plot(line_x_idx, line_y, 'b--', linewidth=2, label='Lower Trendline', alpha=0.8)
+            except Exception as e:
+                print(f"Error plotting lower trendline: {e}")
         
-        # Highlight breakdown point if available
-        if breakdown_point is not None:
-            breakdown_low = safe_float(df_copy.loc[breakdown_point, 'Low'])
-            plt.scatter(breakdown_point, breakdown_low, color='green', s=100, label='Breakdown Point')
-            
-            # Calculate target (measured move equal to the height of the wedge at the breakdown)
-            last_upper = upper_trendline[-1]
-            last_lower = lower_trendline[-1]
-            x_breakdown = df_copy.index.get_loc(breakdown_point)
-            
-            # Calculate the projected upper and lower trendline values at the breakdown point
-            projected_upper = slope_upper * x_breakdown + intercept_upper
-            projected_lower = slope_lower * x_breakdown + intercept_lower
-            
-            # Calculate the height of the wedge at the breakdown
-            wedge_height = projected_upper - projected_lower
-            
-            # Target price is the breakdown price minus the wedge height
-            target_price = breakdown_low - wedge_height
-            
-            # Plot the target line
-            plt.axhline(y=target_price, color='green', linestyle='--', 
-                      label=f'Target: {target_price:.2f}')
+        # Plot breakdown point
+        if breakdown_point is not None and breakdown_point in df.index:
+            try:
+                breakdown_price = safe_float(df.loc[breakdown_point, 'Close'])
+                plt.scatter([breakdown_point], [breakdown_price], color='green', s=150, 
+                          label='Breakdown Point', zorder=6, marker='v', edgecolors='darkgreen', linewidth=2)
+            except Exception as e:
+                print(f"Error plotting breakdown point: {e}")
         
-        plt.title('Rising Wedge Pattern')
-        plt.xlabel('Date')
-        plt.ylabel('Price')
-        plt.legend()
-        plt.grid(True)
+        plt.title('Rising Wedge Pattern Detection', fontsize=16, fontweight='bold', pad=20)
+        plt.xlabel('Date', fontsize=12)
+        plt.ylabel('Price', fontsize=12)
+        plt.legend(loc='best', fontsize=10)
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
         
-        # Save the plot
-        plt.savefig(image_path)
+        # Save plot
+        plt.savefig(image_path, dpi=300, bbox_inches='tight', facecolor='white')
         plt.close()
         
         return image_path
     except Exception as e:
-        print(f"Error plotting Rising Wedge pattern: {e}")
+        print(f"Error creating plot: {e}")
+        try:
+            plt.close()
+        except:
+            pass
         return None
 
 def invokeRisingWedge(df):
     """
-    Invokes the detection of the Rising Wedge pattern and returns the result.
-
-    :param df: DataFrame containing financial data.
-    :return: Tuple containing a message and an image path if a pattern is detected, otherwise a message and None.
+    Main function to detect and analyze Rising Wedge pattern.
     """
     try:
-        # Make a copy of the dataframe to avoid modifying the original
-        df_copy = df.copy()
+        if len(df) < 20:
+            return "Insufficient data for Rising Wedge pattern detection (minimum 20 periods required).", None
         
-        # Check if we have enough data
-        if len(df_copy) < 20:  # Minimum data needed for pattern detection
-            return "Insufficient data for Rising Wedge pattern detection.", None
+        # Detect pattern
+        upper_trendline, lower_trendline, breakdown_point = detect_rising_wedge(df)
         
-        # Detect the Rising Wedge pattern
-        upper_trendline, lower_trendline, breakdown_point = detect_rising_wedge(df_copy)
-        
-        if upper_trendline and lower_trendline:
-            # Generate the plot
-            image_path = plot_rising_wedge(df_copy, upper_trendline, lower_trendline, breakdown_point)
-            
-            if image_path:
-                # Calculate pattern metrics
-                pattern_duration = len(df_copy.loc[min(upper_trendline[0], lower_trendline[0]):max(upper_trendline[-1], lower_trendline[-1])])
-                
-                # Calculate slopes for analysis
-                x_upper = [df_copy.index.get_loc(idx) for idx in upper_trendline]
-                y_upper = [df_copy.loc[idx, 'High'] for idx in upper_trendline]
-                slope_upper, _ = np.polyfit(x_upper, y_upper, 1)
-                
-                x_lower = [df_copy.index.get_loc(idx) for idx in lower_trendline]
-                y_lower = [df_copy.loc[idx, 'Low'] for idx in lower_trendline]
-                slope_lower, _ = np.polyfit(x_lower, y_lower, 1)
-                
-                # Prepare analysis message
-                message = "Rising Wedge pattern detected!\n\n"
-                message += f"Pattern Duration: {pattern_duration} periods\n"
-                
-                if breakdown_point is not None:
-                    breakdown_price = safe_float(df_copy.loc[breakdown_point, 'Low'])
-                    current_price = safe_float(df_copy['Close'].iloc[-1])
-                    message += f"Breakdown Price: {breakdown_price:.2f}\n"
-                    message += f"Current Price: {current_price:.2f}\n"
-                    message += "Status: Breakdown confirmed. Bearish signal active."
-                else:
-                    current_price = safe_float(df_copy['Close'].iloc[-1])
-                    message += f"Current Price: {current_price:.2f}\n"
-                    message += "Status: Pattern forming. Watch for potential breakdown."
-                
-                return message, image_path
-            else:
-                return "Error generating Rising Wedge pattern visualization.", None
-        else:
+        if not upper_trendline or not lower_trendline:
             return "No Rising Wedge pattern detected in the given timeframe.", None
+        
+        # Generate plot
+        image_path = plot_rising_wedge(df, upper_trendline, lower_trendline, breakdown_point)
+        
+        if not image_path:
+            return "Rising Wedge pattern detected but failed to generate visualization.", None
+        
+        # Create analysis message (no emojis for PDF compatibility)
+        message_parts = [
+            "RISING WEDGE PATTERN DETECTED",
+            "",
+            "Pattern Details:",
+            f"   - Upper trendline points: {len(upper_trendline)}",
+            f"   - Lower trendline points: {len(lower_trendline)}",
+            ""
+        ]
+        
+        try:
+            current_price = safe_float(df['Close'].iloc[-1])
+            message_parts.append(f"Current Price: ${current_price:.2f}")
+        except:
+            pass
+        
+        if breakdown_point is not None:
+            try:
+                breakdown_price = safe_float(df.loc[breakdown_point, 'Close'])
+                message_parts.extend([
+                    f"Breakdown Price: ${breakdown_price:.2f}",
+                    f"Breakdown Date: {breakdown_point}",
+                    "",
+                    "Status: BREAKDOWN CONFIRMED",
+                    "Signal: BEARISH - Pattern has broken down",
+                    "Expectation: Further downside movement likely"
+                ])
+            except:
+                message_parts.extend([
+                    "",
+                    "Status: BREAKDOWN DETECTED",
+                    "Signal: BEARISH"
+                ])
+        else:
+            message_parts.extend([
+                "",
+                "Status: PATTERN FORMING",
+                "Watch for potential breakdown below lower trendline",
+                "Expected Signal: BEARISH upon breakdown"
+            ])
+        
+        message_parts.extend([
+            "",
+            "Rising Wedge Characteristics:",
+            "   - Both trendlines slope upward",
+            "   - Lower trendline steeper than upper",
+            "   - Typically bearish reversal pattern",
+            "   - Volume often decreases during formation"
+        ])
+        
+        final_message = "\n".join(message_parts)
+        return final_message, image_path
+        
     except Exception as e:
-        return f"Error during Rising Wedge detection: {e}", None
+        return f"Error during Rising Wedge analysis: {str(e)}", None
+
+# Test function for debugging
+def test_rising_wedge_with_sample_data():
+    """
+    Test function with sample data - remove this in production
+    """
+    # Create sample data
+    dates = pd.date_range('2024-01-01', periods=100, freq='D')
+    
+    # Create rising wedge pattern
+    base_trend = np.linspace(100, 120, 100)
+    noise = np.random.normal(0, 0.5, 100)
+    
+    # Upper boundary (slower rise)
+    upper_multiplier = 1 + 0.05 * np.sin(np.linspace(0, np.pi, 100)) + 0.02 * np.linspace(0, 1, 100)
+    
+    # Lower boundary (faster rise)  
+    lower_multiplier = 1 - 0.03 * np.sin(np.linspace(0, np.pi, 100)) + 0.04 * np.linspace(0, 1, 100)
+    
+    high = base_trend * upper_multiplier + noise
+    low = base_trend * lower_multiplier + noise
+    close = (high + low) / 2 + noise * 0.5
+    open_price = close + np.random.normal(0, 0.2, 100)
+    
+    df = pd.DataFrame({
+        'Open': open_price,
+        'High': high,
+        'Low': low,
+        'Close': close
+    }, index=dates)
+    
+    return invokeRisingWedge(df)

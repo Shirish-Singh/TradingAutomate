@@ -164,16 +164,6 @@ def main(ticker='BTC-USD', start_date='2023-10-01', end_date=None, interval='1d'
                       f"End Date: {end_date}\n"
                       f"Interval: {interval}\n"
                       f"Duration: { calculate_duration(start_date, end_date)}\n")
-
-    # Perform general data analysis
-    signal, confidence, explanation = analyze_data(data)
-
-    # Add analysis results to the PDF (splitting out each result)
-    pdf.add_title("Data Analysis Results - DYOR")
-    # Combine signal, confidence, and explanation into a single paragraph
-    pdf.add_paragraph(f"Signal: {signal}\n"
-                      f"Confidence Level: {confidence:.2f}%\n"
-                      f"Explanation: {explanation}")
     # Process different trading patterns
     patterns = [
         ("Moving Average and RSI Strategy", ma.invokeMARSI),

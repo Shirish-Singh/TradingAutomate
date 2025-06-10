@@ -23,6 +23,7 @@ def safe_float(value):
             return 0.0
         return safe_float(value.iloc[0, 0])
     return float(value)
+
 def ensure_aligned(left, right):
     """
     Ensure two pandas Series or DataFrames are aligned before operations.
@@ -82,41 +83,7 @@ def ensure_aligned(left, right):
     
     return left, right
 
-        
-    # Handle empty Series/DataFrames
-    if (isinstance(left, pd.Series) and len(left) == 0) or (isinstance(left, pd.DataFrame) and left.empty):
-        return 0.0, right
-    if (isinstance(right, pd.Series) and len(right) == 0) or (isinstance(right, pd.DataFrame) and right.empty):
-        return left, 0.0
-    
-    # Align Series/DataFrames
-    if hasattr(left, 'align') and hasattr(right, 'align'):
-        try:
-            return left.align(right, axis=0, copy=False)
-        except Exception as e:
-            # If alignment fails, convert to scalar values as a fallback
-            if isinstance(left, (pd.Series, pd.DataFrame)):
-                left_val = left.iloc[0] if isinstance(left, pd.Series) else left.iloc[0, 0]
-            else:
-                left_val = left
-                
-            if isinstance(right, (pd.Series, pd.DataFrame)):
-                right_val = right.iloc[0] if isinstance(right, pd.Series) else right.iloc[0, 0]
-            else:
-                right_val = right
-                
-            return left_val, right_val
-    
-    return left, right
-
-
 def detect_falling_wedge(df, window_size=5, min_points=3):
-
-    # Check if DataFrame has required columns
-    required_columns = ['High', 'Low', 'Open', 'Close']
-    if not all(col in df.columns for col in required_columns):
-        return None, None, None, None
-        
     """
     Detects the Falling Wedge pattern in a given DataFrame.
 
@@ -125,6 +92,11 @@ def detect_falling_wedge(df, window_size=5, min_points=3):
     :param min_points: Minimum number of points required to confirm a pattern.
     :return: A tuple containing upper trendline points, lower trendline points, and the breakout point.
     """
+    # Check if DataFrame has required columns
+    required_columns = ['High', 'Low', 'Open', 'Close']
+    if not all(col in df.columns for col in required_columns):
+        return None, None, None, None
+        
     # Make a copy of the dataframe to avoid modifying the original
     df_copy = df.copy()
     
@@ -136,19 +108,55 @@ def detect_falling_wedge(df, window_size=5, min_points=3):
     df_copy['rolling_max'] = df_copy['High'].rolling(window=window_size, center=True).max()
     df_copy['rolling_min'] = df_copy['Low'].rolling(window=window_size, center=True).min()
     
-    # Identify peaks and troughs using boolean masks
-    peak_mask = df_copy['High'] == df_copy['rolling_max']
-    trough_mask = df_copy['Low'] == df_copy['rolling_min']
+    # Handle NaNs in rolling max/min with interpolation
+    df_copy['rolling_max'] = df_copy['rolling_max'].interpolate()
+    df_copy['rolling_min'] = df_copy['rolling_min'].interpolate()
     
-    peaks = df_copy[peak_mask]
-    troughs = df_copy[trough_mask]
+    # Handle any remaining NaNs by filling with corresponding values
+    if df_copy['rolling_max'].isna().any():
+        for idx in df_copy.index[df_copy['rolling_max'].isna()]:
+            df_copy.loc[idx, 'rolling_max'] = df_copy.loc[idx, 'High']
+    
+    if df_copy['rolling_min'].isna().any():
+        for idx in df_copy.index[df_copy['rolling_min'].isna()]:
+            df_copy.loc[idx, 'rolling_min'] = df_copy.loc[idx, 'Low']
+    
+    # Final safety check - if there are still NaNs, use the mean
+    if df_copy['rolling_max'].isna().any():
+        mean_high = df_copy['High'].mean()
+        for idx in df_copy.index[df_copy['rolling_max'].isna()]:
+            df_copy.loc[idx, 'rolling_max'] = mean_high
+            
+    if df_copy['rolling_min'].isna().any():
+        mean_low = df_copy['Low'].mean()
+        for idx in df_copy.index[df_copy['rolling_min'].isna()]:
+            df_copy.loc[idx, 'rolling_min'] = mean_low
+    
+    # Create boolean masks for peaks and troughs using a safer approach
+    # Convert to numpy arrays to avoid pandas alignment issues
+    high_values = df_copy['High'].values
+    low_values = df_copy['Low'].values
+    rolling_max_values = df_copy['rolling_max'].values
+    rolling_min_values = df_copy['rolling_min'].values
+    
+    # Find peaks and troughs using numpy comparison with tolerance
+    peak_indices = []
+    trough_indices = []
+    
+    for i in range(len(df_copy)):
+        if abs(high_values[i] - rolling_max_values[i]) < 1e-10:  # Use small tolerance for float comparison
+            peak_indices.append(df_copy.index[i])
+        if abs(low_values[i] - rolling_min_values[i]) < 1e-10:  # Use small tolerance for float comparison
+            trough_indices.append(df_copy.index[i])
+    
+    # Filter to get actual peak and trough dataframes
+    peaks = df_copy.loc[peak_indices] if peak_indices else df_copy.iloc[0:0]  # Empty DataFrame with same structure
+    troughs = df_copy.loc[trough_indices] if trough_indices else df_copy.iloc[0:0]  # Empty DataFrame with same structure
     
     if len(peaks) < min_points or len(troughs) < min_points:
         return [], [], None
     
-    # Get peak and trough indices
-    peak_indices = peaks.index.tolist()
-    trough_indices = troughs.index.tolist()
+    # peak_indices and trough_indices are already defined above
     
     # Find upper and lower trendlines
     upper_trendline = []
@@ -205,7 +213,11 @@ def detect_falling_wedge(df, window_size=5, min_points=3):
     
     # Look for breakout after the pattern formation
     last_point = max(upper_trendline[-1], lower_trendline[-1])
-    after_pattern = df_copy.loc[last_point:].iloc[1:]  # Start from the next point
+    try:
+        after_pattern = df_copy.loc[last_point:].iloc[1:]  # Start from the next point
+    except Exception:
+        # If we can't slice properly, return with no breakout point
+        return upper_trendline, lower_trendline, None
     
     breakout_point = None
     

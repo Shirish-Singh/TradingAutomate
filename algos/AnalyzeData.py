@@ -1,5 +1,44 @@
-import numpy as np
+"""
+TradingAutomate - Data Analysis Module
+=====================================
+
+This module provides functions for analyzing financial data and generating trading signals.
+It calculates technical indicators such as SMA, RSI, and MACD to determine buy/sell/hold signals
+with confidence levels.
+
+## Algorithm Summaries
+
+### 1. safe_float
+Converts various data types to float values safely, with special handling for pandas objects:
+- Handles pandas Series and DataFrames by extracting first values
+- Returns 0.0 for empty pandas objects
+- Prevents "The truth value of a DataFrame is ambiguous" errors in comparisons
+- Used throughout the module to ensure scalar values in calculations
+
+### 2. ensure_aligned
+Ensures proper alignment of pandas objects before operations:
+- Takes two pandas objects (Series or DataFrames) and aligns them on the index
+- Returns aligned versions ready for mathematical operations
+- Prevents pandas alignment warnings and errors
+- Returns original objects if they don't have alignment capabilities
+
+### 3. analyze_data
+Main algorithm that generates trading signals based on technical indicators:
+- Calculates SMA20 and SMA50 to identify trends
+- Uses RSI (14) to identify overbought (>70) and oversold (<30) conditions
+- Computes MACD (12,26,9) for signal line crossover detection
+- Applies a voting mechanism where each indicator contributes buy/sell signals
+- Determines final signal (Buy, Sell, Hold) based on majority vote
+- Calculates confidence level based on signal strength
+- Returns comprehensive explanation of the analysis
+- Includes robust error handling for data issues
+
+This module is designed for use in the TradingAutomate project's PDF report generation
+and provides actionable trading insights based on technical analysis principles.
+"""
+
 import pandas as pd
+import numpy as np
 from ta.trend import SMAIndicator
 from ta.momentum import RSIIndicator
 from ta.trend import MACD
@@ -90,30 +129,31 @@ def analyze_data(data):
         # Check SMA for buy or sell signals
         if np.isnan(last_sma20) or np.isnan(last_sma50):
             sma_signal = 'Unknown'
-        elif last_close > last_sma20 and last_sma20 > last_sma50:
+        # Use safe_float to ensure we're comparing scalars, not DataFrames
+        elif safe_float(last_close) > safe_float(last_sma20) and safe_float(last_sma20) > safe_float(last_sma50):
             buy_signals += 1
             sma_signal = 'Bullish'
-        elif last_close < last_sma20 and last_sma20 < last_sma50:
+        elif safe_float(last_close) < safe_float(last_sma20) and safe_float(last_sma20) < safe_float(last_sma50):
             sell_signals += 1
             sma_signal = 'Bearish'
         else:
             sma_signal = 'Neutral'
 
         # Check RSI for buy or sell signals
-        if last_rsi > 70:
+        if safe_float(last_rsi) > 70:
             sell_signals += 1
             rsi_signal = 'Overbought'
-        elif last_rsi < 30:
+        elif safe_float(last_rsi) < 30:
             buy_signals += 1
             rsi_signal = 'Oversold'
         else:
             rsi_signal = 'Neutral'
 
         # Check MACD for buy or sell signals
-        if last_macd > last_macdsignal:
+        if safe_float(last_macd) > safe_float(last_macdsignal):
             buy_signals += 1
             macd_signal = 'Above Signal'
-        elif last_macd < last_macdsignal:
+        elif safe_float(last_macd) < safe_float(last_macdsignal):
             sell_signals += 1
             macd_signal = 'Below Signal'
         else:

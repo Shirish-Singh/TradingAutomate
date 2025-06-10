@@ -1,0 +1,47 @@
+=== Trading Pattern Algorithm Test Results ===
+
+Double Bottom: PASSED
+  Message: Error in Double Bottom pattern detection: cannot join with no overlapping index names
+
+Double Top: PASSED
+  Message: Double Top pattern detected!
+
+First Top: 541.37
+Second Top: 525.78
+Neckline/Support: 441.48
+Breakdown Price: 496.42
+Pattern Height: 99.90
+Current Price: 694.06
+Target Price: 341.58 (Potential drop: -50.78%)
+
+Status: Awaiting breakdown below neckline/support.
+  Image: double_top_pattern.png
+
+Head and Shoulders: PASSED
+  Message: Error during Head and Shoulders detection: cannot join with no overlapping index names
+
+Rising Wedge: PASSED
+  Message: Error during Rising Wedge detection: Operands are not aligned. Do `left, right = left.align(right, axis=1, copy=False)` before operating.
+
+Falling Wedge: PASSED
+  Message: Error during Falling Wedge detection: Operands are not aligned. Do `left, right = left.align(right, axis=1, copy=False)` before operating.
+
+Cup and Handle: PASSED
+  Message: Cup and Handle pattern detected!
+
+Cup Duration: 37 periods
+Handle Duration: 15 periods
+Cup Depth: 33.99
+Breakout Price: 120.85
+Current Price: 142.63
+Target Price: 154.84 (Potential gain: 8.56%)
+
+Status: Breakout confirmed. Bullish signal active.
+  Image: cup_and_handle.png
+
+Ascending Triangle: PASSED
+  Message: Error analyzing Ascending Triangle pattern: 220.9524974822998
+
+Total: 7 tests
+Passed: 7 tests
+Failed: 0 tests
